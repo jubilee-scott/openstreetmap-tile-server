@@ -4,12 +4,12 @@ set -euo pipefail
 
 function createPostgresConfig() {
   cp /etc/postgresql/14/main/postgresql.custom.conf.tmpl /etc/postgresql/14/main/conf.d/postgresql.custom.conf
-  sudo -u postgres echo "autovacuum = $AUTOVACUUM" >> /etc/postgresql/14/main/conf.d/postgresql.custom.conf
+  sudo -E -u postgres echo "autovacuum = $AUTOVACUUM" >> /etc/postgresql/14/main/conf.d/postgresql.custom.conf
   cat /etc/postgresql/14/main/conf.d/postgresql.custom.conf
 }
 
 function setPostgresPassword() {
-    sudo -u postgres psql -c "ALTER USER renderer PASSWORD '${PGPASSWORD:-renderer}'"
+    sudo -E -u postgres psql -c "ALTER USER renderer PASSWORD '${PGPASSWORD:-renderer}'"
 }
 
 if [ "$#" -ne 1 ]; then
@@ -46,18 +46,18 @@ if [ "$1" == "import" ]; then
     chown renderer: /data/database/
     chown -R postgres: /var/lib/postgresql /data/database/postgres/
     if [ ! -f /data/database/postgres/PG_VERSION ]; then
-        sudo -u postgres /usr/lib/postgresql/14/bin/pg_ctl -D /data/database/postgres/ initdb -o "--locale C.UTF-8"
+        sudo -E -u postgres /usr/lib/postgresql/14/bin/pg_ctl -D /data/database/postgres/ initdb -o "--locale C.UTF-8"
     fi
 
     # Initialize PostgreSQL
     createPostgresConfig
     service postgresql start
-    sudo -u postgres createuser renderer
-    sudo -u postgres createdb -E UTF8 -O renderer gis
-    sudo -u postgres psql -d gis -c "CREATE EXTENSION postgis;"
-    sudo -u postgres psql -d gis -c "CREATE EXTENSION hstore;"
-    sudo -u postgres psql -d gis -c "ALTER TABLE geometry_columns OWNER TO renderer;"
-    sudo -u postgres psql -d gis -c "ALTER TABLE spatial_ref_sys OWNER TO renderer;"
+    sudo -E -u postgres createuser renderer
+    sudo -E -u postgres createdb -E UTF8 -O renderer gis
+    sudo -E -u postgres psql -d gis -c "CREATE EXTENSION postgis;"
+    sudo -E -u postgres psql -d gis -c "CREATE EXTENSION hstore;"
+    sudo -E -u postgres psql -d gis -c "ALTER TABLE geometry_columns OWNER TO renderer;"
+    sudo -E -u postgres psql -d gis -c "ALTER TABLE spatial_ref_sys OWNER TO renderer;"
     setPostgresPassword
 
     # Download Luxembourg as sample if no data is provided
@@ -96,7 +96,7 @@ if [ "$1" == "import" ]; then
     fi
 
     # Import data
-    sudo -u renderer osm2pgsql -d gis --create --slim -G --hstore  \
+    sudo -E -u renderer osm2pgsql -d gis --create --slim -G --hstore  \
       --tag-transform-script /data/style/${NAME_LUA:-openstreetmap-carto.lua}  \
       --number-processes ${THREADS:-4}  \
       -S /data/style/${NAME_STYLE:-openstreetmap-carto.style}  \
@@ -112,7 +112,7 @@ if [ "$1" == "import" ]; then
 
     # Create indexes
     if [ -f /data/style/${NAME_SQL:-indexes.sql} ]; then
-        sudo -u postgres psql -d gis -f /data/style/${NAME_SQL:-indexes.sql}
+        sudo -E -u postgres psql -d gis -f /data/style/${NAME_SQL:-indexes.sql}
     fi
 
     #Import external data
@@ -122,7 +122,7 @@ if [ "$1" == "import" ]; then
     fi
 
     # Register that data has changed for mod_tile caching purposes
-    sudo -u renderer touch /data/database/planet-import-complete
+    sudo -E -u renderer touch /data/database/planet-import-complete
 
     service postgresql stop
 
@@ -173,10 +173,10 @@ if [ "$1" == "run" ]; then
     # start cron job to trigger consecutive updates
     if [ "${UPDATES:-}" == "enabled" ] || [ "${UPDATES:-}" == "1" ]; then
         /etc/init.d/cron start
-        sudo -u renderer touch /var/log/tiles/run.log; tail -f /var/log/tiles/run.log >> /proc/1/fd/1 &
-        sudo -u renderer touch /var/log/tiles/osmosis.log; tail -f /var/log/tiles/osmosis.log >> /proc/1/fd/1 &
-        sudo -u renderer touch /var/log/tiles/expiry.log; tail -f /var/log/tiles/expiry.log >> /proc/1/fd/1 &
-        sudo -u renderer touch /var/log/tiles/osm2pgsql.log; tail -f /var/log/tiles/osm2pgsql.log >> /proc/1/fd/1 &
+        sudo -E -u renderer touch /var/log/tiles/run.log; tail -f /var/log/tiles/run.log >> /proc/1/fd/1 &
+        sudo -E -u renderer touch /var/log/tiles/osmosis.log; tail -f /var/log/tiles/osmosis.log >> /proc/1/fd/1 &
+        sudo -E -u renderer touch /var/log/tiles/expiry.log; tail -f /var/log/tiles/expiry.log >> /proc/1/fd/1 &
+        sudo -E -u renderer touch /var/log/tiles/osm2pgsql.log; tail -f /var/log/tiles/osm2pgsql.log >> /proc/1/fd/1 &
 
     fi
 
@@ -186,7 +186,7 @@ if [ "$1" == "run" ]; then
     }
     trap stop_handler SIGTERM
 
-    sudo -u renderer renderd -f -c /etc/renderd.conf &
+    sudo -E -u renderer renderd -f -c /etc/renderd.conf &
     child=$!
     wait "$child"
 
